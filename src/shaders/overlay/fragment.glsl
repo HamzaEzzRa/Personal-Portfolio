@@ -1,5 +1,9 @@
 #pragma glslify: snoise3 = require("glsl-noise/simplex/3d")
 
+#define S(a,s) smoothstep((1. / u_resolution.y) * 2. * s, 0., a)
+#define rot(a) mat2(cos(a), -sin(a), sin(a), cos(a))
+#define R(a,b) (b * rot(a))
+
 varying vec2 v_uv;
 
 uniform float u_time;
@@ -8,22 +12,23 @@ uniform vec3 u_mouseColor;
 uniform vec2 u_mouse;
 uniform vec2 u_resolution;
 uniform float u_alpha;
+uniform float u_loadingFactor;
 uniform float u_mixAddFactor;
+
+float spheres(vec2 p,float rep) {
+  p *= rep;
+  p = fract(p) - .5;
+  return 1. - S(length(p) - .02, 10.);
+}
+
+float sdc(vec2 p, vec2 r) {
+  vec2 q = abs(p) - r;
+  return max(q.x, q.y);
+}
 
 highp float rand(vec2 co)
 {
-    return fract(sin(mod(dot(co.xy ,vec2(12.9898,78.233)),3.14))*43758.5453);
-}
-
-float tnoise(vec2 co)
-{
-    vec2 w = co;
-    co.y += co.x * 0.5;
-    const vec2 s = vec2(1.0, 0.0);
-	vec2 p = floor(co);
-    if (fract(co.x) < fract(co.y))
-        p += 0.5;    
-    return rand(p);
+    return fract(sin(mod(dot(co.xy, vec2(12.9898, 78.233)), 3.14)) * 43758.5453);
 }
 
 float circle(in vec2 _st, in float _radius, in float blurriness)
@@ -43,23 +48,28 @@ void main()
 
     // Circle Mask
     vec2 circlePos = st + mouse;
-	float c = circle(circlePos, (u_resolution.x / u_resolution.y + u_resolution.y / u_resolution.x) * 0.05, 2.0) * 2.5;
+	float c = circle(circlePos, (u_resolution.x / u_resolution.y + u_resolution.y / u_resolution.x) * 0.07, 2.0) * 2.5;
 
     // Additive Noise
     float offX = v_uv.x + sin(v_uv.y + u_time * 0.1);
     float offY = v_uv.y - u_time * 0.1 - cos(u_time * 0.001) * 0.01;
     float n = snoise3(vec3(offX, offY, u_time * 0.1) * 8.0) - 1.0;
 
-    // Final Mask
+    // Final Mouse Mask
     float mask = smoothstep(0.4, 0.5, n + pow(c, 2.0));
     
     // Colors
-    vec2 mod_uv = (gl_FragCoord.xy * 2.0 - u_resolution.xy) * 0.015;
-    float noise = tnoise(mod_uv);
-    vec4 col = vec4(sin(u_time * 1.75 * noise * 7.0 + noise * 3.141592653589793 * 2.0) * 0.5 + 0.5) * 0.3 + 0.5;
-    col += sin((mod_uv.x - mod_uv.y) * 30.0) * 0.5;
-    col += rand(mod_uv) * 0.5;
-    col *= 0.25;
+    vec3 col = vec3(0.85);
+    col *= spheres(st + floor(u_time) * .15, 20. * (u_resolution.x / u_resolution.y + u_resolution.y / u_resolution.x) * 0.3);
+    
+    float redbox = sdc(R((st.x / st.y * st.y / st.x) * 0.5, st), vec2(1.1, .14) * (u_resolution.x / u_resolution.y + u_resolution.y / u_resolution.x) * 0.4);
+    col = mix(col, vec3(1, 0, .2), S(redbox, 1.));
+    
+    float stripes = sdc(fract(st * 15. + -st.y + u_time) - .5, vec2(.3, .5));
+    float sbound = sdc(st * vec2(0.7, 1.2), vec2(.25, .05));
+    stripes = max(stripes, sbound);
+    col = mix(col, 1. - col, S(stripes, 1.) * u_loadingFactor);
+    col = mix(col, 1. - col, S(abs(sbound) - .002, 1.) * u_loadingFactor);
 
-    gl_FragColor = vec4(mix(u_bgColor, col.xyz, 0.4), clamp(u_alpha * mask + u_mixAddFactor, 0.0, 1.0)); // Don't forget to use u_mixAddFactor with [0-1] clamping to smooth
+    gl_FragColor = vec4(col, clamp(u_alpha * mask + u_mixAddFactor, 0.0, 1.0));
 }

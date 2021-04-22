@@ -169,10 +169,6 @@ windowsElement.appendChild(winFrame);
 // Canvas
 const canvas = document.querySelector("canvas.webgl");
 
-// Loading Bar
-const loadingBar = document.querySelector("div.progress-value");
-const loadingBarContainer = document.querySelector("div.progress-container");
-
 const onWindowResize = () => {
     components.camera.object.aspect = window.innerWidth / window.innerHeight;
     components.camera.object.updateProjectionMatrix();
@@ -298,6 +294,10 @@ const initialize = async () => {
                 type: "f",
                 value: 1
             },
+            u_loadingFactor: {
+                type: "f",
+                value: 1
+            },
             u_mixAddFactor: {
                 type: "f",
                 value: 1
@@ -397,9 +397,9 @@ const initialize = async () => {
         // Complete
         () => {
             loadingFinished = true;
+            gsap.to(overlayMesh.material.uniforms.u_loadingFactor, { duration: 0.75, value: 0 })
             gsap.delayedCall(0.5, () => {
                 components.glRenderer.shadowMap.autoUpdate = false;
-                loadingBarContainer.classList.add("ended");
                 
                 buttons.startButton = document.createElement("button");
                 buttons.startButton.classList.add("start");
@@ -412,14 +412,10 @@ const initialize = async () => {
                 setTimeout(() => {
                     buttons.startButton.style.transform = `scale(1)`;
                 }, 500);
-                setTimeout(() => document.body.removeChild(loadingBarContainer), 900);
             });
         },
         // Progress
-        (itemUrl, itemsLoaded, itemsTotal) => {
-            const progress = itemsLoaded / 31;
-            loadingBar.style.transform = `scaleX(${progress})`;
-        }
+        (itemUrl, itemsLoaded, itemsTotal) => {}
     );
 
     // DRACO Loader
@@ -448,7 +444,6 @@ const initialize = async () => {
 
         cssObjectDeezer = new CSS3DObject(deezerElement);
         cssObjectDeezer.position.copy(laptopScreenMesh.position);
-        cssObjectDeezer.position.y -= 0.0035;
         cssObjectDeezer.rotation.x = laptopScreenMesh.rotation.x;
         cssObjectDeezer.rotation.y = laptopScreenMesh.rotation.y;
         cssObjectDeezer.rotation.z = laptopScreenMesh.rotation.z;
@@ -939,7 +934,7 @@ const handleClick = () => {
             let xOffset = 0;
             let yOffset = 0;
             if (selected.object.name === "Laptop") {
-                target = new THREE.Vector3(0, -targetDistance * 0.0942, -targetDistance * 0.7);
+                target = new THREE.Vector3(0, -targetDistance * 0.065, -targetDistance * 0.75);
                 yOffset = 0.1395;
                 components.cssScene.remove(cssObjectWindows);
             }
