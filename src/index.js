@@ -94,7 +94,8 @@ const passes = {
 const sounds = {
     woodPush: null,
     woodPull: null,
-    movableSelect: null
+    itemSelect: null,
+    pageFlip: null
 };
 
 const buttons = {
@@ -141,7 +142,15 @@ let cssObjectDeezer = null;
 
 let cssObjectWindows = null;
 
+let folderSkinned = {
+    object: null,
+    currentPage: 1,
+    canFlipPage: true
+};
+
 let stats = null;
+
+const MAX_PAGE_COUNT = 2;
 
 // Deezer Element
 const deezerElement = document.createElement("iframe");
@@ -165,6 +174,9 @@ winFrame.setAttribute("frameborder", "0");
 winFrame.setAttribute("allowtransparency", "true");
 winFrame.setAttribute("allow", "encrypted-media");
 windowsElement.appendChild(winFrame);
+
+// Instructions
+let instructionsHolder = null;
 
 // Canvas
 const canvas = document.querySelector("canvas.webgl");
@@ -201,17 +213,24 @@ const transformHelper = (object, camera, domElement) => {
         console.log(object.position);
         console.log(object.rotation);
     });
-    control.attach(object);
+    control.attach(object);xwxqx
     return control;
 };
 
 const updateMaterials = () => {
     components.glScene.traverse((child) => {
-        // Check if the object is clickable. This property is hardcoded in the model.
+        // Check if the object is clickable. This property is coded in the model.
         if (child.userData.IsClickable === 1) {
             clickables.set(child.name, child);
-            if (child instanceof THREE.SkinnedMesh)
+            if (child instanceof THREE.SkinnedMesh) {
                 animables.set(child.name, { reverseFactor: 1 });
+            }
+        }
+
+        else if (child.name === "Folder_Skinned") {
+            folderSkinned.object = child;
+            animables.set(folderSkinned.object.name, { reverseFactor: 1 });
+            folderSkinned.object.visible = false;
         }
 
         if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
@@ -237,9 +256,33 @@ const start = () => {
             document.body.removeChild(buttons.startButton);
         },
         onUpdate: () => {
-            if (tween.progress() > 0.1 && !hasStarted) {
+            const progress = tween.progress();
+            if (progress > 0.1 && !hasStarted) {
                 hasStarted = true;
                 components.controls.enabled = true;
+            }
+
+            if (progress > 0.2 && instructionsHolder === null) {
+                instructionsHolder = document.createElement("div");
+                instructionsHolder.classList.add("instructions");
+                setTimeout(() => instructionsHolder.classList.add("started"), 10);
+                const textLMB = document.createElement("span");
+                textLMB.setAttribute("class", "textLMB");
+                textLMB.textContent = "Move around / Interact with objects";
+                const textWheel = document.createElement("span");
+                textWheel.setAttribute("class", "textWheel");
+                textWheel.textContent = "Zoom in and out";
+                const imgLMB = document.createElement("img");
+                imgLMB.setAttribute("src", "/images/Mouse_LMB.png");
+                imgLMB.setAttribute("class", "imgLMB");
+                const imgWheel = document.createElement("img");
+                imgWheel.setAttribute("src", "/images/Mouse_Wheel.png");
+                imgWheel.setAttribute("class", "imgWheel");
+                instructionsHolder.appendChild(textLMB);
+                instructionsHolder.appendChild(textWheel);
+                instructionsHolder.appendChild(imgLMB);
+                instructionsHolder.appendChild(imgWheel);
+                document.body.appendChild(instructionsHolder);
             }
         },
         onComplete: () => {
@@ -464,6 +507,7 @@ const initialize = async () => {
         cssObjectWindows.rotation.x = monitorScreenMesh.rotation.x;
         cssObjectWindows.rotation.y = monitorScreenMesh.rotation.y;
         cssObjectWindows.rotation.z = monitorScreenMesh.rotation.z;
+        cssObjectWindows.rotateX(-0.001);
         cssObjectWindows.scale.set(0.001148, 0.001126, 1);
         components.cssScene.add(cssObjectWindows);
 
@@ -486,15 +530,16 @@ const initialize = async () => {
     components.camera.object.add(components.listener);
 
     // Sounds
-    sounds.movableSelect = new THREE.Audio(components.listener);
+    sounds.itemSelect = new THREE.Audio(components.listener);
     sounds.woodPush = new THREE.Audio(components.listener);
     sounds.woodPull = new THREE.Audio(components.listener);
+    sounds.pageFlip = new THREE.Audio(components.listener);
     
     const audioLoader = new THREE.AudioLoader();
-    audioLoader.load("/sounds/select.ogg", (buffer) => {
-        sounds.movableSelect.setBuffer(buffer);
-        sounds.movableSelect.setLoop(false);
-        sounds.movableSelect.setVolume(0.6);
+    audioLoader.load("/sounds/item_select.ogg", (buffer) => {
+        sounds.itemSelect.setBuffer(buffer);
+        sounds.itemSelect.setLoop(false);
+        sounds.itemSelect.setVolume(0.6);
     });
     audioLoader.load("/sounds/wood_push.ogg", (buffer) => {
         sounds.woodPush.setBuffer(buffer);
@@ -505,6 +550,11 @@ const initialize = async () => {
         sounds.woodPull.setBuffer(buffer);
         sounds.woodPull.setLoop(false);
         sounds.woodPull.setVolume(0.4);
+    });
+    audioLoader.load("/sounds/page_flip.ogg", (buffer) => {
+        sounds.pageFlip.setBuffer(buffer);
+        sounds.pageFlip.setLoop(false);
+        sounds.pageFlip.setVolume(0.4);
     });
 
     // Post Processing
@@ -762,6 +812,10 @@ const initialize = async () => {
     // Pointer Down / Touch Start
     document.addEventListener("pointerdown", () => {
         drag = false;
+
+        if (instructionsHolder !== null) {
+            setTimeout(() => instructionsHolder.setAttribute("class", "instructions"), 1500);
+        }
     });  
 
     // Pointer Up / Touch End
@@ -825,7 +879,11 @@ const checkIntersections = () => {
         }
     }
     else {
-        document.body.style.cursor = "pointer";
+        if (canReturnSelected && selected.object.name === "Folder" && (folderSkinned.currentPage > 1 || (folderSkinned.currentPage === 1 && components.cursor.x >= 0)) && (folderSkinned.currentPage <= MAX_PAGE_COUNT || (folderSkinned.currentPage === MAX_PAGE_COUNT + 1 && components.cursor.x < 0)))
+            document.body.style.cursor = "grab";
+        else
+            document.body.style.cursor = "pointer";
+        
         passes.outlinePassSkinned.selectedObjects = [];
         passes.outlinePassNonSkinned.selectedObjects = [];
         intersected = null;
@@ -834,56 +892,8 @@ const checkIntersections = () => {
 
 const handleClick = () => {
     if (selected === null) {
-        if (intersected instanceof THREE.SkinnedMesh) {
-            components.glRenderer.shadowMap.autoUpdate = true;
-            components.glRenderer.shadowMap.needsUpdate = true;
-            let action = null;
-            let toPull;
-            switch (intersected.name) {
-                case "Top_Drawer": {
-                    action = components.animationMixer.clipAction(deskAnimations[0]);
-                    toPull = 1;
-                    break;
-                };
-                case "Bottom_Drawer": {
-                    action = components.animationMixer.clipAction(deskAnimations[1]);
-                    toPull = -1;
-                    break;
-                }
-                case "Bottom_Desk": {
-                    action = components.animationMixer.clipAction(deskAnimations[2]);
-                    toPull = -1;
-                    break;
-                }
-            }
-            if (action !== null) {
-                let reverseFactor = animables.get(intersected.name).reverseFactor;
-                toPull *= reverseFactor;
-                if (toPull > 0)
-                    sounds.woodPull.play();
-                else
-                    sounds.woodPush.play();
-                if (reverseFactor > 0) {
-                    action.reset();
-                    action.setLoop(THREE.LoopOnce, 1);
-                    action.clampWhenFinished = true;
-                    action.timeScale = 1;
-                    action.play();
-                }
-                else {
-                    action.timeScale = -1;
-                    action.paused = false;
-                }
-                animables.set(intersected.name, { reverseFactor: -reverseFactor });
-            }
-            shadowUpdateTimeout = setTimeout(() => { // Only update shadow for the length of the animation
-                clearTimeout(shadowUpdateTimeout);
-                components.glRenderer.shadowMap.autoUpdate = false;
-                components.glRenderer.shadowMap.needsUpdate = true;
-            }, 500);
-        }
-        else if (intersected.name === "Paper_Holder" || intersected.name === "Folder") {
-            sounds.movableSelect.play();
+        if (intersected.name === "Paper_Holder" || intersected.name === "Folder") {
+            sounds.itemSelect.play();
             selected = {
                 object: intersected,
                 originalPosition: new THREE.Vector3().copy(intersected.position),
@@ -896,6 +906,11 @@ const handleClick = () => {
             const zoomFactor = Math.pow(zoom * zoomRefFactor, 1.325) - 0.09 * (1 / zoom);
             const targetDistance = 1.175;
             const target = new THREE.Vector3(0, targetDistance * 0.029, targetDistance * 2.1);
+            if (selected.object.name === "Folder") {
+                target.y *= 0.25;
+                target.z *= 0.94;
+            }
+
             target.multiplyScalar(zoomFactor);
             target.applyMatrix4(components.camera.object.matrixWorld);
             components.controls.dampingFactor = 0;
@@ -906,20 +921,31 @@ const handleClick = () => {
                 selected.object.geometry.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI * 0.21));
             }, onUpdate: () => {
                 const currentProgress = tween.progress();
-                passes.bokehPass.uniforms["focus"].value = lerp(passes.params.focus, passes.alternativeBokehParams.focus, currentProgress);
-                passes.bokehPass.uniforms["aperture"].value = lerp(passes.params.aperture, passes.alternativeBokehParams.aperture, currentProgress);
-                passes.bokehPass.uniforms["maxblur"].value = lerp(passes.params.maxblur, passes.alternativeBokehParams.maxblur, currentProgress);
+                if (selected.object.name !== "Folder") {
+                    passes.bokehPass.uniforms["focus"].value = lerp(passes.params.focus, passes.alternativeBokehParams.focus, currentProgress);
+                    passes.bokehPass.uniforms["aperture"].value = lerp(passes.params.aperture, passes.alternativeBokehParams.aperture, currentProgress);
+                    passes.bokehPass.uniforms["maxblur"].value = lerp(passes.params.maxblur, passes.alternativeBokehParams.maxblur, currentProgress);
+                }
                 
                 selected.object.geometry.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI * 0.29 * (currentProgress - lastProgress)));
                 lastProgress = currentProgress;
 
                 selected.object.lookAt(target);
             }, onComplete: () => {
+                if (selected.object.name === "Folder") {
+                    folderSkinned.object.parent.position.copy(selected.object.position);
+                    folderSkinned.object.parent.rotation.copy(selected.object.rotation);
+                    folderSkinned.object.parent.rotateX(Math.PI * 0.5);
+
+                    folderSkinned.object.visible = true;
+                    selected.object.visible = false;
+                }
+
                 canReturnSelected = true;
             }});
         }
         else if (intersected.name === "Laptop" || intersected.name === "Monitor") {
-            sounds.movableSelect.play();
+            sounds.itemSelect.play();
 
             selected = {
                 object: intersected,
@@ -959,7 +985,7 @@ const handleClick = () => {
             }});
         }
         else if (intersected.name == "Lamp") {
-            sounds.movableSelect.play();
+            sounds.itemSelect.play();
             lights.lampLight.enabled = !lights.lampLight.enabled;
             if (lights.lampLight.enabled) {
                 components.glScene.remove(lampFace);
@@ -974,31 +1000,123 @@ const handleClick = () => {
                     child.material.needsUpdate = true;
             });
         }
+        else if (intersected instanceof THREE.SkinnedMesh) {
+            components.glRenderer.shadowMap.autoUpdate = true;
+            components.glRenderer.shadowMap.needsUpdate = true;
+            let action = null;
+            let toPull;
+            switch (intersected.name) {
+                case "Top_Drawer": {
+                    action = components.animationMixer.clipAction(deskAnimations[1]);
+                    toPull = 1;
+                    break;
+                };
+                case "Bottom_Drawer": {
+                    action = components.animationMixer.clipAction(deskAnimations[2]);
+                    toPull = -1;
+                    break;
+                }
+                case "Bottom_Desk": {
+                    action = components.animationMixer.clipAction(deskAnimations[3]);
+                    toPull = -1;
+                    break;
+                }
+            }
+            if (action !== null) {
+                let reverseFactor = animables.get(intersected.name).reverseFactor;
+                toPull *= reverseFactor;
+                if (toPull > 0)
+                    sounds.woodPull.play();
+                else
+                    sounds.woodPush.play();
+                if (reverseFactor > 0) {
+                    action.reset();
+                    action.setLoop(THREE.LoopOnce, 1);
+                    action.clampWhenFinished = true;
+                    action.timeScale = 1;
+                    action.play();
+                }
+                else {
+                    action.timeScale = -1;
+                    action.paused = false;
+                }
+                animables.set(intersected.name, { reverseFactor: -reverseFactor });
+            }
+            shadowUpdateTimeout = setTimeout(() => { // Only update shadow for the length of the animation
+                clearTimeout(shadowUpdateTimeout);
+                components.glRenderer.shadowMap.autoUpdate = false;
+                components.glRenderer.shadowMap.needsUpdate = true;
+            }, 500);
+        }
     }
     else if (canReturnSelected) {
-        sounds.movableSelect.play();
-        const target = selected.originalPosition;
+        if (selected.object.name === "Folder" && (folderSkinned.currentPage <= MAX_PAGE_COUNT || (folderSkinned.currentPage > MAX_PAGE_COUNT && components.cursor.x < 0)) && (folderSkinned.currentPage > 1 || (folderSkinned.currentPage === 1 && components.cursor.x >= 0))) {
+            if (folderSkinned.canFlipPage) {
+                folderSkinned.canFlipPage = false;
+                sounds.pageFlip.play();
+                let reverseFactor = 1;
+                if (components.cursor.x < 0)
+                    reverseFactor *= -1;
+                animables.set(folderSkinned.object.name, reverseFactor);
 
-        let tween = gsap.to(selected.object.position, { duration: 1, x: target.x, y: target.y, z: target.z,
-            onStart: () => {
-                canReturnSelected = false;
-                selected.object.geometry.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI * -0.5));
-                selected.object.rotation.copy(selected.originalRotation);
-            }, onUpdate: () => {
-                const currentProgress = tween.progress();
-                passes.bokehPass.uniforms["focus"].value = lerp(passes.alternativeBokehParams.focus, passes.params.focus, currentProgress);
-                passes.bokehPass.uniforms["aperture"].value = lerp(passes.alternativeBokehParams.aperture, passes.params.aperture, currentProgress);
-                passes.bokehPass.uniforms["maxblur"].value = lerp(passes.alternativeBokehParams.maxblur, passes.params.maxblur, currentProgress);
-            }, onComplete: () => {
-                selected = null;
-                components.controls.dampingFactor = 0.05;
-                components.controls.enabled = true;
-                components.controls.update();
+                let action = components.animationMixer.clipAction(deskAnimations[0]);
+                action.timeScale = 0.9 * reverseFactor;
+                if (folderSkinned.currentPage === 1) {
+                    action.setLoop(THREE.LoopOnce, 1);
+                    action.clampWhenFinished = true;
+                    action.reset();
+                    action.play();
+                }
+                else
+                    action.paused = false;
+
+                folderSkinned.currentPage += 1 * reverseFactor;
+
+                document.body.style.cursor = "grabbing";
+                setTimeout(() => {
+                    checkIntersections();
+                    action.paused = true;
+                    folderSkinned.canFlipPage = true;
+                }, 590);
             }
-        });
+        }
+        else {
+            sounds.itemSelect.play();
+            const target = selected.originalPosition;
+
+            let tween = gsap.to(selected.object.position, { duration: 1, x: target.x, y: target.y, z: target.z,
+                onStart: () => {
+                    canReturnSelected = false;
+                    selected.object.geometry.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI * -0.5));
+                    selected.object.rotation.copy(selected.originalRotation);
+
+                    if (selected.object.name === "Folder") {
+                        selected.object.visible = true;
+                        folderSkinned.object.visible = false;
+                    }
+                }, onUpdate: () => {
+                    const currentProgress = tween.progress();
+                    passes.bokehPass.uniforms["focus"].value = lerp(passes.alternativeBokehParams.focus, passes.params.focus, currentProgress);
+                    passes.bokehPass.uniforms["aperture"].value = lerp(passes.alternativeBokehParams.aperture, passes.params.aperture, currentProgress);
+                    passes.bokehPass.uniforms["maxblur"].value = lerp(passes.alternativeBokehParams.maxblur, passes.params.maxblur, currentProgress);
+                }, onComplete: () => {
+                    if (folderSkinned.currentPage === 0 || folderSkinned.currentPage === MAX_PAGE_COUNT + 1) {
+                        folderSkinned.currentPage = 1;
+                        let action = components.animationMixer.clipAction(deskAnimations[0]);
+                        action.reset();
+                        action.paused = true;
+                    }
+
+                    selected = null;
+                    components.controls.dampingFactor = 0.05;
+                    components.controls.enabled = true;
+                    components.controls.update();
+                }
+            });
+        }
     }
     else if (canReturnCamera) {
-        sounds.movableSelect.play();
+        sounds.itemSelect.play();
         components.controls.target = new THREE.Vector3(0, 0, 0);
         const pos = components.camera.originalPosition;
         gsap.to(components.camera.object.position, { duration: 1.5, x: pos.x, y: pos.y, z: pos.z, onStart: () => {
