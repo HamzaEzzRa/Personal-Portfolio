@@ -558,13 +558,7 @@ const initialize = async () => {
     });
 
     // Post Processing
-    let RenderTargetClass = null;
-    if (components.glRenderer.getPixelRatio() === 1 && components.glRenderer.capabilities.isWebGL2)
-        RenderTargetClass = THREE.WebGLMultisampleRenderTarget;
-    else
-        RenderTargetClass = THREE.WebGLRenderTarget;
-
-    const renderTarget = new RenderTargetClass(
+    const renderTarget = new THREE.WebGLRenderTarget(
         1920,
         1080,
         {
@@ -627,6 +621,8 @@ const initialize = async () => {
     components.controls.target = new THREE.Vector3(0, 0, 0);
     components.controls.minDistance = 3;
     components.controls.maxDistance = 6;
+    components.controls.minPolarAngle = 0.05 * Math.PI;
+    components.controls.maxPolarAngle = 0.95 * Math.PI;
     components.controls.enableDamping = true;
     components.controls.enablePan = false;
     components.controls.enabled = false;
