@@ -539,22 +539,22 @@ const initialize = async () => {
     audioLoader.load("/sounds/item_select.ogg", (buffer) => {
         sounds.itemSelect.setBuffer(buffer);
         sounds.itemSelect.setLoop(false);
-        sounds.itemSelect.setVolume(0.6);
+        sounds.itemSelect.setVolume(0.4);
     });
     audioLoader.load("/sounds/wood_push.ogg", (buffer) => {
         sounds.woodPush.setBuffer(buffer);
         sounds.woodPush.setLoop(false);
-        sounds.woodPush.setVolume(0.4);
+        sounds.woodPush.setVolume(0.3);
     });
     audioLoader.load("/sounds/wood_pull.ogg", (buffer) => {
         sounds.woodPull.setBuffer(buffer);
         sounds.woodPull.setLoop(false);
-        sounds.woodPull.setVolume(0.4);
+        sounds.woodPull.setVolume(0.3);
     });
     audioLoader.load("/sounds/page_flip.ogg", (buffer) => {
         sounds.pageFlip.setBuffer(buffer);
         sounds.pageFlip.setLoop(false);
-        sounds.pageFlip.setVolume(0.4);
+        sounds.pageFlip.setVolume(0.1);
     });
 
     // Post Processing
